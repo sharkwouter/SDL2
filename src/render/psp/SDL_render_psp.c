@@ -510,7 +510,7 @@ PSP_CreateTexture(SDL_Renderer * renderer, SDL_Texture * texture)
     PSP_TextureData* psp_texture = (PSP_TextureData*) SDL_calloc(1, sizeof(*psp_texture));
 
     if(!psp_texture)
-        return -1;
+        return SDL_OutOfMemory();
 
     psp_texture->swizzled = SDL_FALSE;
     psp_texture->width = texture->w;
@@ -1167,6 +1167,7 @@ PSP_DestroyTexture(SDL_Renderer * renderer, SDL_Texture * texture)
     if(psp_texture == 0)
         return;
 
+    LRUTargetRemove(renderdata, psp_texture);
     TextureStorageFree(psp_texture->data);
     SDL_free(psp_texture);
     texture->driverdata = NULL;
