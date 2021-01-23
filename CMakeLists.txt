@@ -1830,6 +1830,7 @@ elseif(RISCOS)
 
   if(SDL_AUDIO)
     CheckOSS()
+  endif()
 elseif(PLATFORM_PSP)
   # Disable some functions which cmake thinks exist but don't
   set(HAVE_SYSCTLBYNAME FALSE)
