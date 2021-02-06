@@ -173,10 +173,10 @@ InVram(void* data)
 static int
 TextureNextPow2(unsigned int w)
 {
+    unsigned int n = 2;
+
     if(w == 0)
         return 0;
-
-    unsigned int n = 2;
 
     while(w > n)
         n <<= 1;
@@ -282,18 +282,23 @@ TextureStorageFree(void* storage) {
 static int
 TextureSwizzle(PSP_TextureData *psp_texture, void* dst)
 {
+    int bytewidth, height, rowblocks, rowblocksadd;
+    unsigned int blockaddress;
+    unsigned int *src = NULL;
+    unsigned char *data = NULL;
+
     if(psp_texture->swizzled)
         return 1;
 
-    int bytewidth = psp_texture->textureWidth*(psp_texture->bits>>3);
-    int height = psp_texture->size / bytewidth;
+    bytewidth = psp_texture->textureWidth*(psp_texture->bits>>3);
+    height = psp_texture->size / bytewidth;
 
-    int rowblocks = (bytewidth>>4);
-    int rowblocksadd = (rowblocks-1)<<7;
-    unsigned int blockaddress = 0;
-    unsigned int *src = (unsigned int*) psp_texture->data;
+    rowblocks = (bytewidth>>4);
+    rowblocksadd = (rowblocks-1)<<7;
+    blockaddress = 0;
+    src = (unsigned int*) psp_texture->data;
 
-    unsigned char *data = dst;
+    data = dst;
     if(!data) {
         data = SDL_malloc(psp_texture->size);
     }
@@ -302,17 +307,13 @@ TextureSwizzle(PSP_TextureData *psp_texture, void* dst)
         return SDL_OutOfMemory();
     }
 
-    int j;
-
-    for(j = 0; j < height; j++, blockaddress += 16)
+    for(int j = 0; j < height; j++, blockaddress += 16)
     {
         unsigned int *block;
 
         block = (unsigned int*)&data[blockaddress];
 
-        int i;
-
-        for(i = 0; i < rowblocks; i++)
+        for(int i = 0; i < rowblocks; i++)
         {
             *block++ = *src++;
             *block++ = *src++;
@@ -336,23 +337,26 @@ TextureSwizzle(PSP_TextureData *psp_texture, void* dst)
 static int
 TextureUnswizzle(PSP_TextureData *psp_texture, void* dst)
 {
+    int bytewidth, height, widthblocks, heightblocks, dstpitch, dstrow;
+    unsigned int *src = NULL;
+    unsigned char *data = NULL;
+    unsigned char *ydst = NULL;
+
     if(!psp_texture->swizzled)
         return 1;
 
-    int blockx, blocky;
+    bytewidth = psp_texture->textureWidth*(psp_texture->bits>>3);
+    height = psp_texture->size / bytewidth;
 
-    int bytewidth = psp_texture->textureWidth*(psp_texture->bits>>3);
-    int height = psp_texture->size / bytewidth;
+    widthblocks = bytewidth/16;
+    heightblocks = height/8;
 
-    int widthblocks = bytewidth/16;
-    int heightblocks = height/8;
+    dstpitch = (bytewidth - 16)/4;
+    dstrow = bytewidth * 8;
 
-    int dstpitch = (bytewidth - 16)/4;
-    int dstrow = bytewidth * 8;
+    src = (unsigned int*) psp_texture->data;
 
-    unsigned int *src = (unsigned int*) psp_texture->data;
-
-    unsigned char *data = dst;
+    data = dst;
 
     if(!data) {
         data = SDL_malloc(psp_texture->size);
@@ -361,21 +365,19 @@ TextureUnswizzle(PSP_TextureData *psp_texture, void* dst)
     if(!data)
         return SDL_OutOfMemory();
 
-    int j;
+    ydst = (unsigned char *)data;
 
-    unsigned char *ydst = (unsigned char *)data;
-
-    for(blocky = 0; blocky < heightblocks; ++blocky)
+    for(int blocky = 0; blocky < heightblocks; ++blocky)
     {
         unsigned char *xdst = ydst;
 
-        for(blockx = 0; blockx < widthblocks; ++blockx)
+        for(int blockx = 0; blockx < widthblocks; ++blockx)
         {
             unsigned int *block;
 
             block = (unsigned int*)xdst;
 
-            for(j = 0; j < 8; ++j)
+            for(int j = 0; j < 8; ++j)
             {
                 *(block++) = *(src++);
                 *(block++) = *(src++);
@@ -470,6 +472,8 @@ TextureSpillTargetsForSpace(PSP_RenderData* data, size_t size)
 
 static int
 TextureBindAsTarget(PSP_RenderData* data, PSP_TextureData* psp_texture) {
+    unsigned int dstFormat;
+
     if(!InVram(psp_texture->data)) {
         // Bring back the texture in vram
         if(TextureSpillTargetsForSpace(data, psp_texture->size) < 0) {
@@ -483,7 +487,7 @@ TextureBindAsTarget(PSP_RenderData* data, PSP_TextureData* psp_texture) {
     //LRUWalk(data);
     sceGuDrawBufferList(psp_texture->format, vrelptr(psp_texture->data), psp_texture->textureWidth);
     // Stencil alpha dst hack
-    unsigned int dstFormat = psp_texture->format;
+    dstFormat = psp_texture->format;
     if(dstFormat == GU_PSM_5551) {
         sceGuEnable(GU_STENCIL_TEST);
         sceGuStencilOp(GU_REPLACE, GU_REPLACE, GU_REPLACE);
@@ -824,6 +828,7 @@ PSP_QueueCopyEx(SDL_Renderer * renderer, SDL_RenderCommand *cmd, SDL_Texture * t
     float u1 = srcrect->x + srcrect->w;
     float v1 = srcrect->y + srcrect->h;
 
+    float cw, sw, ch, sh;
 
     if (!verts) {
         return -1;
@@ -833,10 +838,10 @@ PSP_QueueCopyEx(SDL_Renderer * renderer, SDL_RenderCommand *cmd, SDL_Texture * t
 
     MathSincos(degToRad(angle), &s, &c);
 
-    const float cw = c * width;
-    const float sw = s * width;
-    const float ch = c * height;
-    const float sh = s * height;
+    cw = c * width;
+    sw = s * width;
+    ch = c * height;
+    sh = s * height;
 
     if (flip & SDL_FLIP_VERTICAL) {
         Swap(&v0, &v1);
@@ -975,6 +980,8 @@ PSP_SetBlendState(PSP_RenderData* data, PSP_BlendState* state)
 static int
 PSP_RunCommandQueue(SDL_Renderer * renderer, SDL_RenderCommand *cmd, void *vertices, size_t vertsize)
 {
+    Uint8 *gpumem = NULL;
+
     PSP_RenderData *data = (PSP_RenderData *) renderer->driverdata;
 
     StartDrawing(renderer);
@@ -985,7 +992,7 @@ PSP_RunCommandQueue(SDL_Renderer * renderer, SDL_RenderCommand *cmd, void *verti
        I don't know what the limits on PSP hardware are. It might be useful to have
        rendering backends report a reasonable maximum, so the higher level can flush
        if we appear to be exceeding that. */
-    Uint8 *gpumem = (Uint8 *) sceGuGetMemory(vertsize);
+    gpumem = (Uint8 *) sceGuGetMemory(vertsize);
     if (!gpumem) {
         return SDL_SetError("Couldn't obtain a %d-byte vertex buffer!", (int) vertsize);
     }
@@ -1195,7 +1202,7 @@ PSP_DestroyRenderer(SDL_Renderer * renderer)
 SDL_Renderer *
 PSP_CreateRenderer(SDL_Window * window, Uint32 flags)
 {
-
+    void* doublebuffer = NULL;
     SDL_Renderer *renderer;
     PSP_RenderData *data;
         int pixelformat;
@@ -1211,7 +1218,6 @@ PSP_CreateRenderer(SDL_Window * window, Uint32 flags)
         SDL_OutOfMemory();
         return NULL;
     }
-
 
     renderer->WindowEvent = PSP_WindowEvent;
     renderer->CreateTexture = PSP_CreateTexture;
@@ -1237,6 +1243,7 @@ PSP_CreateRenderer(SDL_Window * window, Uint32 flags)
     renderer->info.flags = (SDL_RENDERER_ACCELERATED | SDL_RENDERER_TARGETTEXTURE);
     renderer->driverdata = data;
     renderer->window = window;
+
 
     if (data->initialized != SDL_FALSE)
         return 0;
@@ -1266,7 +1273,7 @@ PSP_CreateRenderer(SDL_Window * window, Uint32 flags)
             break;
     }
 
-    void* doublebuffer = valloc(PSP_FRAME_BUFFER_SIZE*data->bpp*2);
+    doublebuffer = valloc(PSP_FRAME_BUFFER_SIZE*data->bpp*2);
     data->backbuffer = doublebuffer;
     data->frontbuffer = ((uint8_t*)doublebuffer)+PSP_FRAME_BUFFER_SIZE*data->bpp;
 
